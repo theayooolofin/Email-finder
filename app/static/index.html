@@ -214,6 +214,29 @@
       align-items: center;
     }
 
+    .filter-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(15, 118, 110, 0.2);
+      background: #f3fbfa;
+      color: #0f766e;
+      font-size: 0.82rem;
+      font-weight: 700;
+      user-select: none;
+    }
+
+    .filter-toggle input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      min-height: 16px;
+      margin: 0;
+      accent-color: #0f766e;
+      cursor: pointer;
+    }
+
     button,
     .link-btn {
       border: none;
@@ -466,6 +489,10 @@
           <button class="primary" id="discover-btn" type="submit">Discover Leads</button>
           <button class="secondary" id="load-btn" type="button">Load Saved Leads</button>
           <a class="link-btn accent" id="csv-link" href="/api/v1/leads/export.csv?limit=1000">Download CSV</a>
+          <label class="filter-toggle" for="strict-external-toggle">
+            <input id="strict-external-toggle" type="checkbox" />
+            Strict External Only
+          </label>
           <span class="chip" id="mode-chip">Checking mode...</span>
         </div>
       </form>
@@ -502,6 +529,8 @@
     const tbody = document.getElementById("results-body");
     const emptyState = document.getElementById("empty-state");
     const modeChip = document.getElementById("mode-chip");
+    const strictExternalToggle = document.getElementById("strict-external-toggle");
+    let currentLeads = [];
 
     function setStatus(message, isError = false) {
       statusEl.textContent = message;
@@ -554,9 +583,27 @@
       `;
     }
 
+    function isStrictExternalLead(lead) {
+      const notes = String(lead.data_source_notes || "").toLowerCase();
+      const externalSignals = ["hunter", "wikidata_exec", "web_exec_search", "open_corporates"];
+      const hasExternalSource = externalSignals.some((signal) => notes.includes(signal));
+      if (!hasExternalSource) {
+        return false;
+      }
+
+      const hasOwner = Boolean(String(lead.owner_name || "").trim());
+      const hasContact = Boolean(String(lead.email || "").trim() || String(lead.business_phone || "").trim());
+      return hasOwner && hasContact;
+    }
+
     function renderLeads(leads) {
-      tbody.innerHTML = leads.map(rowHtml).join("");
-      emptyState.style.display = leads.length ? "none" : "block";
+      const strictMode = strictExternalToggle.checked;
+      const visibleLeads = strictMode ? leads.filter(isStrictExternalLead) : leads;
+      tbody.innerHTML = visibleLeads.map(rowHtml).join("");
+      emptyState.style.display = visibleLeads.length ? "none" : "block";
+      emptyState.textContent = strictMode
+        ? "No leads match Strict External Only filter."
+        : "Run a search to populate leads.";
     }
 
     async function checkHealth() {
@@ -606,7 +653,8 @@
           throw new Error(`Request failed (${res.status})`);
         }
         const leads = await res.json();
-        renderLeads(leads);
+        currentLeads = leads;
+        renderLeads(currentLeads);
         setStatus(`Loaded ${leads.length} saved leads.`);
       } catch (err) {
         setStatus(`Could not load leads: ${err.message}`, true);
@@ -665,7 +713,8 @@
 
         const data = await res.json();
         const leads = data.leads || [];
-        renderLeads(leads);
+        currentLeads = leads;
+        renderLeads(currentLeads);
 
         const withContactSignals = leads.filter(
           (lead) => lead.business_website || lead.owner_name || lead.email || lead.business_phone
@@ -687,6 +736,7 @@
     });
 
     loadBtn.addEventListener("click", loadSavedLeads);
+    strictExternalToggle.addEventListener("change", () => renderLeads(currentLeads));
 
     checkHealth();
     loadSavedLeads();
