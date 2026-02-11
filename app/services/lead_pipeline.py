@@ -184,7 +184,10 @@ class LeadPipeline:
                 business.website,
                 prefer_executive=strict_executive,
             )
-            if website_enrichment.has_any_data() or website_enrichment.business_name:
+            if strict_executive:
+                if website_enrichment.business_name:
+                    sources.append("website_identity")
+            elif website_enrichment.has_any_data() or website_enrichment.business_name:
                 sources.append("website_extract")
 
             if self._is_better_business_name(
@@ -237,31 +240,14 @@ class LeadPipeline:
 
         # Free website extraction fallback.
         if website_enrichment:
-            if strict_executive and website_enrichment.owner_name and self._is_strict_executive_title(website_enrichment.owner_title):
-                strict_candidates.append(
-                    StrictExecCandidate(
-                        name=website_enrichment.owner_name,
-                        title=website_enrichment.owner_title,
-                        source="website_extract",
-                        confidence=max(0.45, website_enrichment.email_confidence),
-                        email=website_enrichment.email,
-                        phone=website_enrichment.phone,
-                    )
-                )
-
             if not strict_executive and not owner_name and website_enrichment.owner_name:
                 owner_name = website_enrichment.owner_name
                 owner_title = website_enrichment.owner_title
 
-            if not email and website_enrichment.email:
-                if not strict_executive:
-                    email = website_enrichment.email
-                    email_status = website_enrichment.email_status
-                    email_confidence = max(0.0, min(website_enrichment.email_confidence, 1.0))
-                elif owner_name and self._email_matches_owner(website_enrichment.email, owner_name):
-                    email = website_enrichment.email
-                    email_status = website_enrichment.email_status
-                    email_confidence = max(0.0, min(website_enrichment.email_confidence, 1.0))
+            if not strict_executive and not email and website_enrichment.email:
+                email = website_enrichment.email
+                email_status = website_enrichment.email_status
+                email_confidence = max(0.0, min(website_enrichment.email_confidence, 1.0))
 
         if strict_executive:
             wikidata_officers = await self.wikidata_exec.search_officers(
@@ -286,6 +272,7 @@ class LeadPipeline:
                 business_name=resolved_business_name,
                 website=business.website,
                 limit=6,
+                include_company_website=False,
             )
             if web_exec_candidates:
                 sources.append("web_exec_search")
@@ -341,41 +328,12 @@ class LeadPipeline:
 
         # Secondary leadership fallback for strict mode when no executive is found.
         if strict_executive and not owner_name:
-            secondary_website_enrichment: WebsiteEnrichment | None = None
-            if business.website:
-                secondary_website_enrichment = await self.website_enricher.enrich(
-                    business.website,
-                    prefer_executive=False,
-                )
-                if secondary_website_enrichment.has_any_data() or secondary_website_enrichment.business_name:
-                    sources.append("website_extract_secondary")
-
-            if (
-                secondary_website_enrichment
-                and secondary_website_enrichment.owner_name
-                and self._is_secondary_leadership_title(secondary_website_enrichment.owner_title)
-            ):
-                owner_name = secondary_website_enrichment.owner_name
-                owner_title = secondary_website_enrichment.owner_title
+            secondary_owner = self._pick_best_secondary_owner(registry_officers)
+            if secondary_owner:
+                owner_name = secondary_owner.name
+                owner_title = secondary_owner.title
                 used_secondary_leadership_fallback = True
                 sources.append("secondary_leadership_fallback")
-
-                if (
-                    not email
-                    and secondary_website_enrichment.email
-                    and self._email_matches_owner(secondary_website_enrichment.email, owner_name)
-                ):
-                    email = secondary_website_enrichment.email
-                    email_status = secondary_website_enrichment.email_status
-                    email_confidence = max(0.0, min(secondary_website_enrichment.email_confidence, 1.0))
-
-            if not owner_name:
-                secondary_owner = self._pick_best_secondary_owner(registry_officers)
-                if secondary_owner:
-                    owner_name = secondary_owner.name
-                    owner_title = secondary_owner.title
-                    used_secondary_leadership_fallback = True
-                    sources.append("secondary_leadership_fallback")
 
         # Pattern lookup when owner is known but email still missing.
         if owner_name and domain and not email and self.settings.hunter_api_key:
@@ -419,7 +377,7 @@ class LeadPipeline:
             business_phone = web_exec_phone
             phone_status = web_exec_phone_status
 
-        if not business_phone and website_enrichment and website_enrichment.phone:
+        if not strict_executive and not business_phone and website_enrichment and website_enrichment.phone:
             business_phone = website_enrichment.phone
             phone_status = website_enrichment.phone_status
 

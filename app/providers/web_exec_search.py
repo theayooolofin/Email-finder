@@ -126,6 +126,7 @@ class WebExecutiveSearchProvider:
         business_name: str,
         website: str | None,
         limit: int = 6,
+        include_company_website: bool = True,
     ) -> list[WebExecutiveCandidate]:
         normalized_business = " ".join((business_name or "").strip().split())
         if not normalized_business:
@@ -147,6 +148,7 @@ class WebExecutiveSearchProvider:
                 source_url=result.url,
                 domain=domain,
                 source_weight=0.68,
+                include_company_website=include_company_website,
             ):
                 self._merge_candidate(candidates, candidate)
 
@@ -168,6 +170,7 @@ class WebExecutiveSearchProvider:
                         source_url=result.url,
                         domain=domain,
                         source_weight=0.58,
+                        include_company_website=include_company_website,
                     )
                     if not page_candidates:
                         continue
@@ -316,8 +319,13 @@ class WebExecutiveSearchProvider:
         source_url: str,
         domain: str | None,
         source_weight: float,
+        include_company_website: bool,
     ) -> list[WebExecutiveCandidate]:
-        if not self._source_is_trusted(source_url=source_url, preferred_domain=domain):
+        if not self._source_is_trusted(
+            source_url=source_url,
+            preferred_domain=domain,
+            include_company_website=include_company_website,
+        ):
             return []
 
         compact = " ".join((text or "").split())
@@ -539,12 +547,16 @@ class WebExecutiveSearchProvider:
         return host in SEARCH_HOST_BLOCKLIST
 
     @staticmethod
-    def _source_is_trusted(source_url: str, preferred_domain: str | None) -> bool:
+    def _source_is_trusted(
+        source_url: str,
+        preferred_domain: str | None,
+        include_company_website: bool = True,
+    ) -> bool:
         host = WebExecutiveSearchProvider._normalize_host(urlparse(source_url).netloc)
         if not host:
             return False
 
-        if preferred_domain:
+        if preferred_domain and include_company_website:
             normalized_domain = WebExecutiveSearchProvider._normalize_host(preferred_domain)
             if host == normalized_domain or host.endswith(f".{normalized_domain}"):
                 return True
