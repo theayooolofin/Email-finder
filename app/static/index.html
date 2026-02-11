@@ -664,8 +664,21 @@
         }
 
         const data = await res.json();
-        renderLeads(data.leads || []);
-        setStatus(`Done. Added ${data.total} leads.`, false);
+        const leads = data.leads || [];
+        renderLeads(leads);
+
+        const withContactSignals = leads.filter(
+          (lead) => lead.business_website || lead.owner_name || lead.email || lead.business_phone
+        ).length;
+
+        if (!website && leads.length > 0 && withContactSignals === 0) {
+          setStatus(
+            `Found ${leads.length} businesses, but none had websites/contact signals to enrich in free mode. Try Direct Mode with a website, or add GOOGLE_PLACES_API_KEY for richer search results.`,
+            true
+          );
+        } else {
+          setStatus(`Done. Added ${data.total} leads.`, false);
+        }
       } catch (err) {
         setStatus(`Could not discover leads: ${err.message}`, true);
       } finally {
