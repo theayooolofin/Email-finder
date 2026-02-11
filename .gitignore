@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+leadfinder.db
+.pytest_cache/
+.mypy_cache/
+*.log
+
+# Android/Gradle build artifacts
+mobile-android/.gradle/
+mobile-android/build/
+mobile-android/app/build/
+mobile-android/local.properties
+mobile-android/keystore/
+*.jks

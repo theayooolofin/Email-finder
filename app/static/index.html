@@ -1,0 +1,682 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lead Finder</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Manrope:wght@500;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #102527;
+      --paper: #f7f4ee;
+      --sea: #0f766e;
+      --sea-soft: #d8f0ec;
+      --sun: #f59e0b;
+      --coral: #ef4444;
+      --slate: #64748b;
+      --white: #ffffff;
+      --radius: 16px;
+      --shadow: 0 14px 35px rgba(16, 37, 39, 0.14);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      overflow-x: hidden;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Space Grotesk", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 10% 8%, rgba(245, 158, 11, 0.22), transparent 35%),
+        radial-gradient(circle at 82% 0%, rgba(15, 118, 110, 0.22), transparent 38%),
+        linear-gradient(145deg, #fffdf8 0%, #f1fbf9 55%, #f6f1e8 100%);
+      min-height: 100vh;
+    }
+
+    .shell {
+      width: 100%;
+      max-width: 1120px;
+      margin: clamp(14px, 2.8vw, 30px) auto;
+      padding: 0 clamp(8px, 2.2vw, 14px);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      animation: rise 420ms ease-out;
+    }
+
+    @keyframes rise {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #073939 0%, #0f766e 58%, #1f9e8f 100%);
+      color: var(--white);
+      border-radius: 20px;
+      padding: clamp(20px, 3vw, 30px);
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+      isolation: isolate;
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      left: -95px;
+      bottom: -95px;
+      width: 220px;
+      height: 220px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(245, 158, 11, 0.38) 0%, rgba(245, 158, 11, 0) 74%);
+      z-index: -1;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -46px;
+      top: -46px;
+      width: 200px;
+      height: 200px;
+      border-radius: 50%;
+      border: 22px solid rgba(255, 255, 255, 0.16);
+    }
+
+    .hero-copy {
+      position: relative;
+      z-index: 1;
+      min-width: 0;
+    }
+
+    .hero-eyebrow {
+      margin: 0;
+      font-size: 0.74rem;
+      text-transform: uppercase;
+      letter-spacing: 0.9px;
+      font-weight: 700;
+      opacity: 0.9;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-family: "Manrope", sans-serif;
+      font-size: clamp(1.5rem, 2vw + 1rem, 2.3rem);
+      letter-spacing: 0.2px;
+    }
+
+    .sub {
+      margin: 0;
+      max-width: 60ch;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: clamp(0.95rem, 0.85rem + 0.3vw, 1.03rem);
+      line-height: 1.55;
+    }
+
+    .hero-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .hero-pills span {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.14);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(2px);
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 14px;
+    }
+
+    .card {
+      grid-column: span 12;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(15, 118, 110, 0.16);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: clamp(14px, 1.8vw, 18px);
+      backdrop-filter: blur(2px);
+    }
+
+    .inputs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .field {
+      flex: 1 1 220px;
+      min-width: 0;
+      display: grid;
+      gap: 6px;
+    }
+
+    .field-wide {
+      flex: 2 1 420px;
+    }
+
+    .field label {
+      font-size: 0.84rem;
+      color: var(--slate);
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
+
+    input {
+      width: 100%;
+      border: 1px solid #c5d7d4;
+      border-radius: 12px;
+      background: #fcfffe;
+      color: var(--ink);
+      padding: 11px 12px;
+      min-height: 44px;
+      font-family: inherit;
+      font-size: 0.95rem;
+      transition: border-color 160ms ease, transform 160ms ease;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: var(--sea);
+      transform: translateY(-1px);
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    button,
+    .link-btn {
+      border: none;
+      border-radius: 12px;
+      padding: 11px 14px;
+      min-height: 44px;
+      font-family: inherit;
+      font-weight: 700;
+      font-size: 0.92rem;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+      touch-action: manipulation;
+    }
+
+    .primary {
+      background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%);
+      color: var(--white);
+      box-shadow: 0 8px 22px rgba(15, 118, 110, 0.34);
+    }
+
+    .secondary {
+      background: var(--sea-soft);
+      color: #0c5953;
+    }
+
+    .accent {
+      background: #fff4df;
+      color: #9a6300;
+      border: 1px solid rgba(245, 158, 11, 0.28);
+    }
+
+    button:hover,
+    .link-btn:hover {
+      transform: translateY(-1px);
+      opacity: 0.96;
+    }
+
+    .chip {
+      margin-left: auto;
+      font-size: 0.82rem;
+      font-weight: 700;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: #e8f3f1;
+      color: #0f766e;
+      border: 1px solid rgba(15, 118, 110, 0.2);
+    }
+
+    .status {
+      margin-top: 12px;
+      font-size: 0.92rem;
+      color: var(--slate);
+      min-height: 1.2em;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid #d8e5e2;
+      border-radius: 14px;
+      background: #f9fcfb;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 930px;
+      font-size: 0.9rem;
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid #e3ecea;
+      vertical-align: top;
+    }
+
+    th {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--slate);
+      background: #edf5f3;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    td.score {
+      font-weight: 700;
+      color: #0c5f58;
+    }
+
+    td.muted {
+      color: var(--slate);
+    }
+
+    .empty {
+      padding: 16px;
+      color: var(--slate);
+      font-size: 0.94rem;
+    }
+
+    .error {
+      color: var(--coral);
+      font-weight: 700;
+    }
+
+    .muted {
+      color: var(--slate);
+    }
+
+    @media (max-width: 980px) {
+      .chip {
+        margin-left: 0;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .hero {
+        padding: 18px;
+      }
+
+      .field,
+      .field-wide {
+        flex: 1 1 100%;
+      }
+
+      .actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      button,
+      .link-btn {
+        width: 100%;
+      }
+
+      input {
+        font-size: 16px;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .table-wrap {
+        border: none;
+        background: transparent;
+      }
+
+      table {
+        min-width: 0;
+      }
+
+      thead {
+        display: none;
+      }
+
+      tbody {
+        display: grid;
+        gap: 10px;
+      }
+
+      tr {
+        display: block;
+        border-radius: 14px;
+        border: 1px solid #d8e5e2;
+        background: #ffffff;
+        box-shadow: 0 8px 18px rgba(16, 37, 39, 0.08);
+        padding: 12px;
+      }
+
+      td {
+        display: grid;
+        grid-template-columns: 96px minmax(0, 1fr);
+        gap: 8px;
+        padding: 8px 0;
+        border-bottom: 1px dashed #e3ecea;
+      }
+
+      td:last-child {
+        border-bottom: 0;
+      }
+
+      td::before {
+        content: attr(data-label);
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--slate);
+        font-weight: 700;
+      }
+    }
+
+    @media (max-width: 420px) {
+      td {
+        grid-template-columns: 82px minmax(0, 1fr);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="hero-eyebrow">Lead Intelligence Dashboard</p>
+        <h1>Lead Finder Control Room</h1>
+        <p class="sub">Paste one business website for direct enrichment, or run niche + city discovery. Pull high-confidence contacts and export CSV in one place.</p>
+        <div class="hero-pills">
+          <span>Direct Website Mode</span>
+          <span>Niche + City Search</span>
+          <span>CSV Export</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <form id="discover-form">
+        <div class="inputs">
+          <div class="field field-wide">
+            <label for="website">Business Website (Direct Mode)</label>
+            <input id="website" name="website" placeholder="https://example.com" />
+          </div>
+          <div class="field">
+            <label for="business_name">Business Name (Optional)</label>
+            <input id="business_name" name="business_name" placeholder="Acme Dental" maxlength="255" />
+          </div>
+          <div class="field">
+            <label for="niche">Niche (Search Mode)</label>
+            <input id="niche" name="niche" value="dental clinic" minlength="2" maxlength="80" />
+          </div>
+          <div class="field">
+            <label for="city">City (Search Mode)</label>
+            <input id="city" name="city" value="Chicago" minlength="2" maxlength="80" />
+          </div>
+          <div class="field">
+            <label for="country">Country</label>
+            <input id="country" name="country" value="US" minlength="2" maxlength="56" />
+          </div>
+          <div class="field">
+            <label for="max_businesses">Max Businesses</label>
+            <input id="max_businesses" name="max_businesses" type="number" value="5" min="1" max="50" required />
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="primary" id="discover-btn" type="submit">Discover Leads</button>
+          <button class="secondary" id="load-btn" type="button">Load Saved Leads</button>
+          <a class="link-btn accent" id="csv-link" href="/api/v1/leads/export.csv?limit=1000">Download CSV</a>
+          <span class="chip" id="mode-chip">Checking mode...</span>
+        </div>
+      </form>
+
+      <div class="status" id="status"></div>
+    </section>
+
+    <section class="card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Business</th>
+              <th>Owner</th>
+              <th>Email</th>
+              <th>Email Conf</th>
+              <th>Phone</th>
+              <th>Score</th>
+              <th>Source</th>
+            </tr>
+          </thead>
+          <tbody id="results-body"></tbody>
+        </table>
+        <div class="empty" id="empty-state">Run a search to populate leads.</div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById("discover-form");
+    const discoverBtn = document.getElementById("discover-btn");
+    const loadBtn = document.getElementById("load-btn");
+    const statusEl = document.getElementById("status");
+    const tbody = document.getElementById("results-body");
+    const emptyState = document.getElementById("empty-state");
+    const modeChip = document.getElementById("mode-chip");
+
+    function setStatus(message, isError = false) {
+      statusEl.textContent = message;
+      statusEl.className = isError ? "status error" : "status";
+    }
+
+    function setBusy(flag) {
+      discoverBtn.disabled = flag;
+      loadBtn.disabled = flag;
+      discoverBtn.textContent = flag ? "Working..." : "Discover Leads";
+    }
+
+    function formatScore(score) {
+      if (score === null || score === undefined) {
+        return "-";
+      }
+      return `${Number(score).toFixed(0)} / 100`;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function rowHtml(lead) {
+      const business = `<strong>${escapeHtml(lead.business_name || "-")}</strong><br><span class="muted">${escapeHtml(lead.city || "")}</span>`;
+      const owner = `${escapeHtml(lead.owner_name || "-")}<br><span class="muted">${escapeHtml(lead.owner_title || "")}</span>`;
+      const email = `${escapeHtml(lead.email || "-")}<br><span class="muted">${escapeHtml(lead.email_status || "unknown")}</span>`;
+      const emailConfidence = lead.email_confidence === null || lead.email_confidence === undefined
+        ? "-"
+        : `${Math.round(Number(lead.email_confidence) * 100)}%`;
+      const phone = `${escapeHtml(lead.business_phone || "-")}<br><span class="muted">${escapeHtml(lead.phone_status || "unknown")}${lead.phone_type ? `, ${escapeHtml(lead.phone_type)}` : ""}</span>`;
+      const score = formatScore(lead.lead_score);
+      const source = escapeHtml(lead.data_source_notes || "-");
+
+      return `
+        <tr>
+          <td data-label="Business">${business}</td>
+          <td data-label="Owner">${owner}</td>
+          <td data-label="Email">${email}</td>
+          <td data-label="Email Conf" class="score">${emailConfidence}</td>
+          <td data-label="Phone">${phone}</td>
+          <td data-label="Score" class="score">${score}</td>
+          <td data-label="Source" class="muted">${source}</td>
+        </tr>
+      `;
+    }
+
+    function renderLeads(leads) {
+      tbody.innerHTML = leads.map(rowHtml).join("");
+      emptyState.style.display = leads.length ? "none" : "block";
+    }
+
+    async function checkHealth() {
+      try {
+        const res = await fetch("/health");
+        if (!res.ok) {
+          throw new Error(`Health request failed (${res.status})`);
+        }
+        const data = await res.json();
+        if (data.demo_mode) {
+          modeChip.textContent = "Mode: Demo";
+          setStatus("DEMO_MODE is ON. Switch it OFF in .env for real people data.");
+          return;
+        }
+
+        if (data.discovery_mode === "premium") {
+          modeChip.textContent = "Mode: Live APIs";
+          setStatus("Live mode is ready.");
+          return;
+        }
+
+        if (data.discovery_mode === "free_fallback") {
+          modeChip.textContent = "Mode: Live (Free)";
+          const missing = Array.isArray(data.missing_recommended_keys)
+            ? data.missing_recommended_keys.join(", ")
+            : "google_places_api_key, hunter_api_key";
+          setStatus(
+            `Running free fallback mode. You can still fetch real contacts; paid keys improve quality. Missing recommended keys: ${missing}`
+          );
+          return;
+        }
+
+        modeChip.textContent = "Mode: Unknown";
+        setStatus("Readiness mode is unknown.", true);
+      } catch (err) {
+        modeChip.textContent = "Mode check failed";
+        setStatus("Could not check live readiness.", true);
+      }
+    }
+
+    async function loadSavedLeads() {
+      setBusy(true);
+      setStatus("Loading saved leads...");
+      try {
+        const res = await fetch("/api/v1/leads?limit=200&offset=0");
+        if (!res.ok) {
+          throw new Error(`Request failed (${res.status})`);
+        }
+        const leads = await res.json();
+        renderLeads(leads);
+        setStatus(`Loaded ${leads.length} saved leads.`);
+      } catch (err) {
+        setStatus(`Could not load leads: ${err.message}`, true);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const website = form.website.value.trim();
+      const businessName = form.business_name.value.trim();
+      const niche = form.niche.value.trim();
+      const city = form.city.value.trim();
+      const country = form.country.value.trim() || "US";
+
+      const payload = {
+        country,
+        max_businesses: Number(form.max_businesses.value),
+      };
+
+      if (website) {
+        payload.website = website;
+        if (businessName) {
+          payload.business_name = businessName;
+        }
+        if (niche) {
+          payload.niche = niche;
+        }
+        if (city) {
+          payload.city = city;
+        }
+      } else {
+        if (!niche || !city) {
+          setStatus("Enter a website, or provide both niche and city.", true);
+          return;
+        }
+        payload.niche = niche;
+        payload.city = city;
+      }
+
+      setBusy(true);
+      setStatus(website ? "Enriching website..." : "Searching and enriching leads...");
+
+      try {
+        const res = await fetch("/api/v1/discover", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const body = await res.text();
+          throw new Error(`Request failed (${res.status}): ${body}`);
+        }
+
+        const data = await res.json();
+        renderLeads(data.leads || []);
+        setStatus(`Done. Added ${data.total} leads.`, false);
+      } catch (err) {
+        setStatus(`Could not discover leads: ${err.message}`, true);
+      } finally {
+        setBusy(false);
+      }
+    });
+
+    loadBtn.addEventListener("click", loadSavedLeads);
+
+    checkHealth();
+    loadSavedLeads();
+  </script>
+</body>
+</html>
