@@ -107,3 +107,23 @@ An Android WebView app scaffold is available in:
 
 Setup and build instructions:
 - `mobile-android/README.md`
+
+## 9. GitHub Automation (CI/CD)
+
+This repo includes GitHub Actions workflow:
+- file: `.github/workflows/ci-cd.yml`
+- CI runs on every push/PR:
+  - install dependencies
+  - `python -m compileall app`
+  - smoke test (`GET /health`) using FastAPI TestClient
+- CD runs on pushes to `main` only when deploy secret exists.
+
+### Enable Auto-Deploy
+
+In GitHub repo settings, add this secret:
+- `DEPLOY_WEBHOOK_URL`
+
+Use your hosting provider deploy hook URL (for example Render/Railway).
+
+Behavior after setup:
+- push to `main` -> CI runs, then deploy webhook is triggered automatically.
