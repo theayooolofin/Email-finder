@@ -89,6 +89,7 @@ GENERIC_LOCAL_HINTS = (
     "team",
 )
 NAME_STOPWORDS = {
+    "all",
     "and",
     "in",
     "at",
@@ -121,9 +122,25 @@ NAME_STOPWORDS = {
     "that",
     "these",
     "those",
+    "to",
     "best",
     "learn",
     "more",
+    "business",
+    "call",
+    "home",
+    "main",
+    "menu",
+    "navigation",
+    "owner",
+    "phone",
+    "perform",
+    "receive",
+    "service",
+    "services",
+    "ship",
+    "view",
+    "visit",
 }
 NAME_TOKEN_BLOCKLIST = {
     "co",
@@ -914,6 +931,9 @@ class WebsiteEnricher:
         if lowered_tokens[0] in NAME_STOPWORDS or lowered_tokens[-1] in NAME_STOPWORDS:
             return None
 
+        if any(token in NAME_STOPWORDS for token in lowered_tokens):
+            return None
+
         lowered = {token.lower() for token in non_prefix}
         if lowered.issubset(NAME_STOPWORDS):
             return None
@@ -1029,9 +1049,6 @@ class WebsiteEnricher:
             return True
 
         if len(last) >= 1 and f"{first}{last[0]}" in local:
-            return True
-
-        if local == first or local == last:
             return True
 
         return False

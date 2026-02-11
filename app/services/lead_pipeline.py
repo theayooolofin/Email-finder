@@ -1,5 +1,6 @@
 ﻿import logging
 import re
+from dataclasses import dataclass
 
 from app.core.config import Settings
 from app.providers.google_places import BusinessCandidate, GooglePlacesProvider
@@ -48,6 +49,42 @@ SECONDARY_LEADERSHIP_KEYWORDS = (
     "director",
     "partner",
 )
+PERSON_NAME_TOKEN_BLOCKLIST = {
+    "about",
+    "business",
+    "call",
+    "click",
+    "contact",
+    "home",
+    "learn",
+    "main",
+    "menu",
+    "more",
+    "navigation",
+    "our",
+    "services",
+    "team",
+    "welcome",
+    "with",
+    "your",
+}
+STRICT_SOURCE_WEIGHTS = {
+    "wikidata_exec": 0.92,
+    "hunter_domain": 0.82,
+    "web_exec_search": 0.74,
+    "website_extract": 0.63,
+    "open_corporates": 0.56,
+}
+
+
+@dataclass(slots=True)
+class StrictExecCandidate:
+    name: str
+    title: str | None
+    source: str
+    confidence: float
+    email: str | None = None
+    phone: str | None = None
 
 
 class LeadPipeline:
@@ -139,6 +176,7 @@ class LeadPipeline:
         web_exec_phone_status = "unknown"
         used_secondary_leadership_fallback = False
         registry_officers: list[OfficerCandidate] = []
+        strict_candidates: list[StrictExecCandidate] = []
 
         website_enrichment: WebsiteEnrichment | None = None
         if business.website:
@@ -157,6 +195,7 @@ class LeadPipeline:
                 resolved_business_name = (website_enrichment.business_name or resolved_business_name).strip()
 
         # Premium owner source when Hunter key is available.
+        domain_people: list[DomainPerson] = []
         if domain and self.settings.hunter_api_key:
             sources.append("hunter")
             domain_people = await self.hunter.search_domain_people(
@@ -169,7 +208,20 @@ class LeadPipeline:
                 require_executive=strict_executive,
             )
 
-            if best_person:
+            if strict_executive:
+                for person in domain_people:
+                    if not self._is_strict_executive_title(person.title):
+                        continue
+                    strict_candidates.append(
+                        StrictExecCandidate(
+                            name=person.full_name,
+                            title=person.title,
+                            source="hunter_domain",
+                            confidence=max(0.45, person.confidence or 0.0),
+                            email=person.email,
+                        )
+                    )
+            elif best_person:
                 owner_name = best_person.full_name
                 owner_title = best_person.title
                 email = best_person.email
@@ -185,10 +237,21 @@ class LeadPipeline:
 
         # Free website extraction fallback.
         if website_enrichment:
-            if not owner_name and website_enrichment.owner_name:
-                if not strict_executive or self._is_strict_executive_title(website_enrichment.owner_title):
-                    owner_name = website_enrichment.owner_name
-                    owner_title = website_enrichment.owner_title
+            if strict_executive and website_enrichment.owner_name and self._is_strict_executive_title(website_enrichment.owner_title):
+                strict_candidates.append(
+                    StrictExecCandidate(
+                        name=website_enrichment.owner_name,
+                        title=website_enrichment.owner_title,
+                        source="website_extract",
+                        confidence=max(0.45, website_enrichment.email_confidence),
+                        email=website_enrichment.email,
+                        phone=website_enrichment.phone,
+                    )
+                )
+
+            if not strict_executive and not owner_name and website_enrichment.owner_name:
+                owner_name = website_enrichment.owner_name
+                owner_title = website_enrichment.owner_title
 
             if not email and website_enrichment.email:
                 if not strict_executive:
@@ -200,7 +263,7 @@ class LeadPipeline:
                     email_status = website_enrichment.email_status
                     email_confidence = max(0.0, min(website_enrichment.email_confidence, 1.0))
 
-        if strict_executive and not owner_name:
+        if strict_executive:
             wikidata_officers = await self.wikidata_exec.search_officers(
                 business_name=resolved_business_name,
                 website=business.website,
@@ -208,37 +271,71 @@ class LeadPipeline:
             )
             if wikidata_officers:
                 sources.append("wikidata_exec")
-                owner = self._pick_best_owner(officers=wikidata_officers, require_executive=True)
-                owner_name = owner.name if owner else None
-                owner_title = owner.title if owner else None
+                for officer in wikidata_officers:
+                    strict_candidates.append(
+                        StrictExecCandidate(
+                            name=officer.name,
+                            title=officer.title,
+                            source="wikidata_exec",
+                            confidence=0.72,
+                        )
+                    )
 
-        if strict_executive and business.website and not owner_name:
+        if strict_executive and business.website:
             web_exec_candidates = await self.web_exec_search.search_executives(
                 business_name=resolved_business_name,
                 website=business.website,
                 limit=6,
             )
-            best_web_exec = self._pick_best_web_exec_candidate(web_exec_candidates)
-            if best_web_exec:
+            if web_exec_candidates:
                 sources.append("web_exec_search")
-                owner_name = best_web_exec.name
-                owner_title = best_web_exec.title
+                for candidate in web_exec_candidates:
+                    strict_candidates.append(
+                        StrictExecCandidate(
+                            name=candidate.name,
+                            title=candidate.title,
+                            source="web_exec_search",
+                            confidence=max(0.45, candidate.confidence),
+                            email=candidate.email,
+                            phone=candidate.phone,
+                        )
+                    )
 
-                if not email and best_web_exec.email and self._email_matches_owner(best_web_exec.email, owner_name):
-                    email = best_web_exec.email
-                    email_status = "web_exec_search"
-                    email_confidence = max(email_confidence, best_web_exec.confidence)
-
-                if best_web_exec.phone:
-                    web_exec_phone = best_web_exec.phone
-                    web_exec_phone_status = "valid"
-
-        # Corporate registry fallback if still no owner.
-        if not owner_name:
+        # Corporate registry fallback when no owner is known, or as strict corroboration source.
+        if strict_executive or not owner_name:
             registry_officers = await self.open_corporates.search_officers(resolved_business_name, limit=8)
             if registry_officers:
                 sources.append("open_corporates")
-            owner = self._pick_best_owner(officers=registry_officers, require_executive=strict_executive)
+            if strict_executive:
+                for officer in registry_officers:
+                    if not self._is_strict_executive_title(officer.title):
+                        continue
+                    strict_candidates.append(
+                        StrictExecCandidate(
+                            name=officer.name,
+                            title=officer.title,
+                            source="open_corporates",
+                            confidence=0.52,
+                        )
+                    )
+
+        if strict_executive:
+            best_exec = self._pick_best_strict_exec_candidate(strict_candidates)
+            if best_exec:
+                owner_name = best_exec.name
+                owner_title = best_exec.title
+
+                if best_exec.email and self._email_matches_owner(best_exec.email, best_exec.name):
+                    email = best_exec.email
+                    email_status = f"strict_{best_exec.source}"
+                    email_confidence = max(email_confidence, min(1.0, best_exec.confidence))
+
+                if best_exec.phone:
+                    web_exec_phone = best_exec.phone
+                    web_exec_phone_status = "valid"
+
+        if not strict_executive and not owner_name:
+            owner = self._pick_best_owner(officers=registry_officers, require_executive=False)
             owner_name = owner.name if owner else None
             owner_title = owner.title if owner else None
 
@@ -425,6 +522,108 @@ class LeadPipeline:
         )
         return ranked[0]
 
+    def _pick_best_strict_exec_candidate(
+        self,
+        candidates: list[StrictExecCandidate],
+    ) -> StrictExecCandidate | None:
+        if not candidates:
+            return None
+
+        cleaned: list[StrictExecCandidate] = []
+        for candidate in candidates:
+            normalized_name = self._normalize_person_name(candidate.name)
+            if not normalized_name:
+                continue
+            if not self._is_strict_executive_title(candidate.title):
+                continue
+
+            email = candidate.email
+            if email and not self._email_matches_owner(email, normalized_name):
+                email = None
+
+            cleaned.append(
+                StrictExecCandidate(
+                    name=normalized_name,
+                    title=candidate.title,
+                    source=candidate.source,
+                    confidence=max(0.0, min(candidate.confidence, 1.0)),
+                    email=email,
+                    phone=candidate.phone,
+                )
+            )
+
+        if not cleaned:
+            return None
+
+        sources_by_name: dict[str, set[str]] = {}
+        for candidate in cleaned:
+            key = self._person_name_key(candidate.name)
+            if not key:
+                continue
+            sources_by_name.setdefault(key, set()).add(candidate.source)
+
+        merged: dict[str, StrictExecCandidate] = {}
+        for candidate in cleaned:
+            key = self._person_name_key(candidate.name)
+            if not key:
+                continue
+
+            current = merged.get(key)
+            if not current:
+                merged[key] = candidate
+                continue
+
+            if self._title_rank(candidate.title) > self._title_rank(current.title):
+                current.title = candidate.title
+
+            current.confidence = max(current.confidence, candidate.confidence)
+
+            if STRICT_SOURCE_WEIGHTS.get(candidate.source, 0.4) > STRICT_SOURCE_WEIGHTS.get(current.source, 0.4):
+                current.source = candidate.source
+
+            if candidate.email and not current.email:
+                current.email = candidate.email
+
+            if candidate.phone and not current.phone:
+                current.phone = candidate.phone
+
+        ranked = sorted(
+            merged.values(),
+            key=lambda candidate: self._strict_candidate_score(
+                candidate=candidate,
+                corroboration_count=len(sources_by_name.get(self._person_name_key(candidate.name), set())),
+            ),
+            reverse=True,
+        )
+
+        best = ranked[0] if ranked else None
+        if not best:
+            return None
+
+        # Reject single-source weak guesses to reduce false positives.
+        best_sources = len(sources_by_name.get(self._person_name_key(best.name), set()))
+        best_score = self._strict_candidate_score(best, best_sources)
+        if best_sources == 1 and best_score < 1.45:
+            return None
+
+        return best
+
+    def _strict_candidate_score(self, candidate: StrictExecCandidate, corroboration_count: int) -> float:
+        score = 0.0
+        score += STRICT_SOURCE_WEIGHTS.get(candidate.source, 0.4)
+        score += candidate.confidence * 0.55
+        score += (self._title_rank(candidate.title) / max(1, len(TITLE_PRIORITY))) * 0.35
+
+        if corroboration_count > 1:
+            score += min(0.5, (corroboration_count - 1) * 0.25)
+
+        if candidate.email:
+            score += 0.18
+        if candidate.phone:
+            score += 0.08
+
+        return score
+
     @staticmethod
     def _title_rank(title: str | None) -> int:
         if not title:
@@ -435,6 +634,39 @@ class LeadPipeline:
             if keyword in title_lower:
                 return len(TITLE_PRIORITY) - index
         return 1
+
+    @staticmethod
+    def _person_name_key(name: str | None) -> str:
+        if not name:
+            return ""
+        clean = re.sub(r"[^A-Za-z\s]", " ", name)
+        tokens = [token.lower() for token in clean.split() if token]
+        if len(tokens) < 2:
+            return ""
+        return f"{tokens[0]}::{tokens[-1]}"
+
+    @staticmethod
+    def _normalize_person_name(raw_name: str | None) -> str | None:
+        if not raw_name:
+            return None
+
+        cleaned = " ".join(str(raw_name).strip().split())
+        cleaned = re.sub(r"(?i),?\s*(dds|dmd|md|ms|phd|jr|sr)\.?$", "", cleaned).strip()
+        if not cleaned:
+            return None
+
+        tokens = [re.sub(r"[^A-Za-z'`-]", "", token) for token in cleaned.replace(".", " ").split()]
+        tokens = [token for token in tokens if token]
+        if len(tokens) < 2 or len(tokens) > 4:
+            return None
+
+        lowered = [token.lower() for token in tokens]
+        if any(token in PERSON_NAME_TOKEN_BLOCKLIST for token in lowered):
+            return None
+        if any(len(token) < 2 for token in tokens):
+            return None
+
+        return " ".join(token.capitalize() for token in tokens)
 
     @staticmethod
     def _is_strict_executive_title(title: str | None) -> bool:
@@ -484,9 +716,6 @@ class LeadPipeline:
             return True
 
         if len(last) >= 1 and f"{first}{last[0]}" in compact:
-            return True
-
-        if first == compact or last == compact:
             return True
 
         return False

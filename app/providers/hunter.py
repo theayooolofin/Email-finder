@@ -21,6 +21,22 @@ GENERIC_LOCAL_PARTS = {
     "support",
     "team",
 }
+NAME_TOKEN_BLOCKLIST = {
+    "about",
+    "admin",
+    "business",
+    "careers",
+    "contact",
+    "home",
+    "info",
+    "menu",
+    "navigation",
+    "office",
+    "sales",
+    "services",
+    "support",
+    "team",
+}
 
 
 @dataclass(slots=True)
@@ -136,11 +152,9 @@ class HunterProvider:
             if not email:
                 continue
 
-            full_name = self._full_name_from_row(row=row, fallback_email=email)
-            if "@" in full_name:
-                local_part = email.split("@", 1)[0]
-                if local_part in GENERIC_LOCAL_PARTS:
-                    continue
+            full_name = self._full_name_from_row(row=row)
+            if not full_name:
+                continue
 
             confidence = row.get("confidence")
             normalized_confidence: float | None = None
@@ -187,23 +201,20 @@ class HunterProvider:
         )
 
     @staticmethod
-    def _full_name_from_row(row: dict, fallback_email: str) -> str:
+    def _full_name_from_row(row: dict) -> str | None:
         first = (row.get("first_name") or "").strip()
         last = (row.get("last_name") or "").strip()
         full = " ".join(part for part in [first, last] if part).strip()
-        if full:
-            return full
+        normalized_full = HunterProvider._normalize_person_name(full)
+        if normalized_full:
+            return normalized_full
 
         raw_full = (row.get("full_name") or "").strip()
-        if raw_full:
-            return raw_full
+        normalized_raw = HunterProvider._normalize_person_name(raw_full)
+        if normalized_raw:
+            return normalized_raw
 
-        local_part = fallback_email.split("@", 1)[0]
-        tokens = [token for token in re.split(r"[._-]+", local_part) if token and token.isalpha()]
-        if len(tokens) >= 2:
-            return f"{tokens[0].title()} {tokens[-1].title()}"
-
-        return fallback_email
+        return None
 
     @staticmethod
     def _demo_domain_people(domain: str, limit: int) -> list[DomainPerson]:
@@ -244,3 +255,28 @@ class HunterProvider:
             return f"status={status}"
 
         return exc.__class__.__name__
+
+    @staticmethod
+    def _normalize_person_name(raw_name: str | None) -> str | None:
+        if not raw_name:
+            return None
+
+        cleaned = " ".join(str(raw_name).strip().split())
+        cleaned = re.sub(r"(?i),?\s*(dds|dmd|md|ms|phd|jr|sr)\.?$", "", cleaned).strip()
+        if not cleaned:
+            return None
+
+        tokens = [re.sub(r"[^A-Za-z'`-]", "", token) for token in cleaned.replace(".", " ").split()]
+        tokens = [token for token in tokens if token]
+        if len(tokens) < 2 or len(tokens) > 4:
+            return None
+
+        lowered = [token.lower() for token in tokens]
+        if any(token in NAME_TOKEN_BLOCKLIST for token in lowered):
+            return None
+        if any(token in GENERIC_LOCAL_PARTS for token in lowered):
+            return None
+        if any(len(token) < 2 for token in tokens):
+            return None
+
+        return " ".join(token.capitalize() for token in tokens)
